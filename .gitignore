@@ -1,0 +1,8 @@
+# 含 API Key 的配置文件
+claude-code/*.json
+gemini/*.json
+codex/*.json
+servers/*.json
+
+# macOS
+.DS_Store
