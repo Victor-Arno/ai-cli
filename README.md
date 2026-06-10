@@ -1,6 +1,6 @@
 # AI CLI 开发者工具箱
 
-在一处管理 Claude Code / Gemini CLI / Codex CLI 的 API 配置，以及远程服务器 SSHFS 挂载。交互式终端菜单操作。适合Macos/Linux环境
+管理 Claude Code / Gemini CLI / Codex CLI 的 API 配置，以及远程服务器 SSHFS 挂载。交互式终端菜单操作。适合Macos/Linux环境
 
 ## 前置：安装 AI CLI
 
