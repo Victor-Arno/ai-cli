@@ -144,7 +144,8 @@ sudo apt install sshfs
 {
   "name": "GPU服务器",
   "host": "user@10.0.0.1",
-  "remote_path": "/home/user/cuda-project"
+  "remote_path": "/home/user/cuda-project",
+  "port": "22"
 }
 ```
 
