@@ -1184,8 +1184,13 @@ print("""\033[1;36m  远程服务器 ── 使用说明\033[0m
   • 服务器只需有 SSH，不需要装 Claude Code
 
 \033[1;37m前置条件\033[0m
-  \033[2m  brew install --cask macfuse\033[0m
-  \033[2m  brew install sshfs\033[0m
+  \033[1;33m1. 传公钥到服务器（一次性，之后免密码）:\033[0m
+  \033[2m  ssh-copy-id -p 端口 用户@地址\033[0m
+  \033[2m  如端口非标准: ssh-copy-id -p 36096 root@xxx.com\033[0m
+
+  \033[1;33m2. 安装 SSHFS:\033[0m
+  \033[2m  macOS:  brew install --cask macfuse && brew install sshfs\033[0m
+  \033[2m  Linux:  sudo apt install sshfs\033[0m
 """)
 PYEOF
   echo ''
@@ -1222,15 +1227,16 @@ ai_server_test() {
 
     name=$(python3 -c "import json; print(json.load(open('$profile'))['name'])")
     host=$(python3 -c "import json; print(json.load(open('$profile'))['host'])")
+    port=$(python3 -c "import json; print(json.load(open('$profile')).get('port','22'))")
 
     echo ''
     echo "  \033[1;37m目标: \033[1;32m$name\033[0m"
-    echo "  SSH:   \033[2m$host\033[0m"
+    echo "  SSH:   \033[2m$host:$port\033[0m"
     echo ''
     echo "\033[1;34m  正在连接...\033[0m"
     echo ''
 
-    result=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$host" "echo ok && uname -a" 2>&1)
+    result=$(ssh -p "$port" -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$host" "echo ok && uname -a" 2>&1)
 
     if [ $? -eq 0 ]; then
       echo "  \033[1;32m✓ 连接成功\033[0m"
@@ -1282,6 +1288,7 @@ ai_server_mount() {
     name=$(python3 -c "import json; print(json.load(open('$profile'))['name'])")
     host=$(python3 -c "import json; print(json.load(open('$profile'))['host'])")
     remote_path=$(python3 -c "import json; print(json.load(open('$profile'))['remote_path'])")
+    port=$(python3 -c "import json; print(json.load(open('$profile')).get('port','22'))")
     safe=$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-')
     mount_point="$REMOTE_BASE/$safe"
 
@@ -1296,7 +1303,7 @@ ai_server_mount() {
 
     echo ''
     echo "\033[1;34m正在挂载 $name ...\033[0m"
-    sshfs "$host:$remote_path" "$mount_point" -ovolname="$name" 2>&1
+    sshfs -p "$port" "$host:$remote_path" "$mount_point" -ovolname="$name" 2>&1
 
     if [ $? -eq 0 ]; then
       echo "\033[1;32m已挂载 → $mount_point\033[0m"
@@ -1309,7 +1316,7 @@ ai_server_mount() {
   done
 }
 
-# 卸载服务器
+# 断开服务器
 ai_server_umount() {
   while true; do
     profiles=($(ls "$SERVER_PROFILES"/*.json 2>/dev/null))
@@ -1318,7 +1325,7 @@ ai_server_umount() {
     fi
 
     clear
-    echo '\033[1;36m  卸载服务器\033[0m'
+    echo '\033[1;36m  断开服务器\033[0m'
     echo ''
 
     i=1
@@ -1357,14 +1364,14 @@ ai_server_umount() {
     mount_point="$REMOTE_BASE/$safe"
 
     echo ''
-    echo "\033[1;34m正在卸载 $name ...\033[0m"
+    echo "\033[1;34m正在断开 $name ...\033[0m"
     umount "$mount_point" 2>&1
 
     if [ $? -eq 0 ]; then
-      echo "\033[1;32m$name 已卸载\033[0m"
+      echo "\033[1;32m$name 已断开\033[0m"
       rmdir "$mount_point" 2>/dev/null
     else
-      echo "\033[1;31m卸载失败，请确认没有程序正在使用该目录\033[0m"
+      echo "\033[1;31m断开失败，请确认没有程序正在使用该目录\033[0m"
     fi
     sleep 1
     return
@@ -1388,13 +1395,17 @@ ai_server_add() {
   read remote_path
   [ -z "$remote_path" ] && { echo '路径不能为空'; sleep 1; return; }
 
+  printf 'SSH 端口（默认 22）: '
+  read port
+  [ -z "$port" ] && port="22"
+
   safe=$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-')
   file="$SERVER_PROFILES/$safe.json"
 
-  python3 - "$name" "$host" "$remote_path" "$file" << 'PYEOF'
+  python3 - "$name" "$host" "$remote_path" "$port" "$file" << 'PYEOF'
 import json, sys
-data = {"name": sys.argv[1], "host": sys.argv[2], "remote_path": sys.argv[3]}
-with open(sys.argv[4], 'w') as f:
+data = {"name": sys.argv[1], "host": sys.argv[2], "remote_path": sys.argv[3], "port": sys.argv[4]}
+with open(sys.argv[5], 'w') as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
 print("ok")
 PYEOF
@@ -1409,7 +1420,7 @@ PYEOF
     [yY]*)
       mount_point="$REMOTE_BASE/$safe"
       mkdir -p "$mount_point" 2>/dev/null
-      sshfs "$host:$remote_path" "$mount_point" -ovolname="$name" 2>&1
+      sshfs -p "$port" "$host:$remote_path" "$mount_point" -ovolname="$name" 2>&1
       if [ $? -eq 0 ]; then
         echo "\033[1;32m已挂载 → $mount_point\033[0m"
         _open "$mount_point"
@@ -1453,7 +1464,7 @@ ai_server_delete() {
 
     extra=""
     if mount | grep -q "$mount_point"; then
-      extra="\033[1;33m  ⚠ 该服务器已挂载，删除前将自动卸载\033[0m"
+      extra="\033[1;33m  ⚠ 该服务器已挂载，删除前将自动断开\033[0m"
     fi
 
     printf "\033[1;31m确认删除 $name ? [y/N] \033[0m"
@@ -1489,6 +1500,7 @@ for f in sorted(os.listdir(profiles_dir)):
         p = json.load(open(os.path.join(profiles_dir, f)))
         name = p.get("name", f)
         host = p.get("host", "?")
+        port = p.get("port", "22")
         remote_path = p.get("remote_path", "?")
 
         safe = ''.join(c for c in name.lower().replace(' ', '-') if c.isalnum() or c == '-')
@@ -1501,15 +1513,15 @@ for f in sorted(os.listdir(profiles_dir)):
             mounted = False
 
         status = "\033[1;32m● 已挂载\033[0m" if mounted else "\033[2m○ 未挂载\033[0m"
-        profiles.append((name, host, remote_path, mount_point, status, mounted))
+        profiles.append((name, host, port, remote_path, mount_point, status, mounted))
     except:
         pass
 
 print("\033[1;36m  服务器列表\033[0m\n")
 
-for name, host, remote_path, mount_point, status, mounted in profiles:
+for name, host, port, remote_path, mount_point, status, mounted in profiles:
     print(f"  \033[1m{name}\033[0m  {status}")
-    print(f"    连接: \033[2m{host}\033[0m")
+    print(f"    连接: \033[2m{host}:{port}\033[0m")
     print(f"    远程: \033[2m{remote_path}\033[0m")
     print(f"    本地: \033[2m{mount_point}\033[0m")
     print()

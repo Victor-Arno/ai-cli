@@ -129,8 +129,14 @@ curl -fsSL https://raw.githubusercontent.com/Victor-Arno/ai-cli/main/install.sh 
 
 **前置：**
 ```bash
-brew install --cask macfuse
-brew install sshfs
+# 1. 传公钥到服务器（一次性，之后免密码）
+ssh-copy-id -p 端口 用户@地址
+
+# 2. 安装 SSHFS
+# macOS
+brew install --cask macfuse && brew install sshfs
+# Linux
+sudo apt install sshfs
 ```
 
 **配置文件：**
